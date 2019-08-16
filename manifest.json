@@ -1,0 +1,23 @@
+{
+    "required_api_version": "^2.0.0",
+    "name": "DRT",
+    "description": "Durham Region Transit information",
+    "developer_name": "Patrick Gaskin",
+    "icon": "images/icon.png",
+    "options": {
+        "query_debounce": 0.25
+    },
+    "preferences": [{
+        "id": "kw",
+        "type": "keyword",
+        "name": "DRT Departures",
+        "description": "Durham Region Transit information",
+        "default_value": "drt"
+    }, {
+        "id": "drtapi",
+        "type": "input",
+        "name": "DRTApi",
+        "description": "drtapi base URL",
+        "default_value": "https://drtapi.geek1011.net"
+    }]
+}
