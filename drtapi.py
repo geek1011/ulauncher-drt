@@ -35,6 +35,14 @@ class Stop:
     def parse(obj: object) -> 'Stop':
         return Stop(obj["id"], obj["name"], obj["lat"], obj["lon"])
 
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "lat": self.lat,
+            "lon": self.lon
+        }
+
 class Departure:
     def __init__(self, route_id: str, destination: str, is_real_time: bool, time: str, time_late: str):
         self.route_id = route_id

@@ -1,8 +1,12 @@
+import json
 from datetime import datetime
 from typing import Iterable
+from os import path
+
 from drtapi import DRTApiException, DRTApi, Stop, Departure
 from requests import RequestException
 
+from ulauncher.config import CACHE_DIR
 from ulauncher.api.client.Extension import Extension
 from ulauncher.api.client.EventListener import EventListener
 from ulauncher.api.shared.event import KeywordQueryEvent, PreferencesEvent, PreferencesUpdateEvent, ItemEnterEvent
@@ -26,13 +30,19 @@ class DRTExtension(Extension):
 
     # Storage
 
-    fav = [] # TODO: persist
+    fav_path = path.join(CACHE_DIR, "ulauncher-drt.favorites")
 
     def fav_get(self) -> Iterable[Stop]:
+        try:
+            with open(DRTExtension.fav_path) as f:
+                return [Stop.parse(v) for v in json.load(f)] or []
+        except Exception:
+            return []
         return DRTExtension.fav
     
     def fav_set(self, stops: Iterable[Stop]):
-        DRTExtension.fav = stops
+        with open(DRTExtension.fav_path, 'w') as f:
+            json.dump([stop.to_dict() for stop in stops], f)
 
     def fav_add(self, id: str):
         stop = self.drt.stop(str(id))
