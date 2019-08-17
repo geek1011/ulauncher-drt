@@ -39,7 +39,7 @@ class DRTExtension(Extension):
         except Exception:
             return []
         return DRTExtension.fav
-    
+
     def fav_set(self, stops: Iterable[Stop]):
         with open(DRTExtension.fav_path, 'w') as f:
             json.dump([stop.to_dict() for stop in stops], f)
@@ -48,24 +48,24 @@ class DRTExtension(Extension):
         stop = self.drt.stop(str(id))
         self.fav_remove(str(id))
         self.fav_set([stop] + list(self.fav_get()))
-    
+
     def fav_remove(self, id: str):
         self.fav_set(list(filter(lambda x: str(x.id) != str(id), self.fav_get())))
-    
+
     def fav_has(self, id: str) -> bool:
         return any([str(stop.id) == str(id) for stop in self.fav_get()])
 
     # Actions
 
     def get_favorites(self, ev: KeywordQueryEvent) -> BaseAction:
-        return RenderResultListAction([self.make_favourite(stop, self.drt.departures(str(stop.id)), ev.get_query()) for stop in self.fav_get()]) # TODO
-    
+        return RenderResultListAction([self.make_favourite(stop, self.drt.departures(str(stop.id)), ev.get_query()) for stop in self.fav_get()])
+
     def get_stops(self, ev: KeywordQueryEvent, arg: str) -> BaseAction:
         items = []
         for stop in self.drt.stops(ev.get_argument())[:5]:
             items.append(self.make_stop(stop, ev.get_query()))
         return RenderResultListAction(items)
-    
+
     def get_departures(self, ev: KeywordQueryEvent, arg: str) -> BaseAction:
         items = []
 
@@ -144,7 +144,7 @@ class DRTExtension(Extension):
             name=f"{stop.name}",
             description=f"Last updated {datetime.now().strftime('%H:%M:%S')}",
             highlightable=False,
-            on_enter=SetUserQueryAction(f"{self.kw} departures {stop.id} refresh"),
+            on_enter=SetUserQueryAction(f"{self.kw} departures {stop.id}`"),
             on_alt_enter=self.make_stop_menu(stop, back)
         )
 
