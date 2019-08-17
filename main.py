@@ -25,7 +25,9 @@ class DRTExtension(Extension):
         self.subscribe(ItemEnterEvent, ItemEnterListener())
 
     # Storage
-    fav = []
+
+    fav = [] # TODO: persist
+
     def fav_get(self) -> Iterable[Stop]:
         return DRTExtension.fav
     
@@ -45,23 +47,20 @@ class DRTExtension(Extension):
 
     # Actions
 
-    def get_favorites(self) -> BaseAction:
-        return RenderResultListAction([self.make_stop(stop) for stop in self.fav_get()]) # TODO
+    def get_favorites(self, ev: KeywordQueryEvent) -> BaseAction:
+        return RenderResultListAction([self.make_favourite(stop, self.drt.departures(str(stop.id)), ev.get_query()) for stop in self.fav_get()]) # TODO
     
     def get_stops(self, ev: KeywordQueryEvent, arg: str) -> BaseAction:
         items = []
         for stop in self.drt.stops(ev.get_argument())[:5]:
-            items.append(self.make_stop(stop))
+            items.append(self.make_stop(stop, ev.get_query()))
         return RenderResultListAction(items)
     
     def get_departures(self, ev: KeywordQueryEvent, arg: str) -> BaseAction:
-        if arg.endswith(" refresh"):
-            return SetUserQueryAction(ev.get_query().replace(" refresh", "", 1))
-
         items = []
 
         stop = self.drt.stop(arg)
-        items.append(self.make_departures_stop(stop))
+        items.append(self.make_departures_stop(stop, ev.get_query()))
 
         for departure in self.drt.departures(stop.id)[:5]:
             items.append(self.make_departures_departure(departure))
@@ -70,51 +69,73 @@ class DRTExtension(Extension):
 
     # Items
 
-    def make_stop_menu(self, stop: Stop) -> BaseAction:
-        back = ExtensionResultItem(
+    def make_stop_menu(self, stop: Stop, back: str) -> BaseAction:
+        items = [ExtensionResultItem(
+            icon="images/icon.png",
+            name="Departures",
+            highlightable=False,
+            on_enter=SetUserQueryAction(f"{self.kw} departures {stop.id}")
+        )]
+
+        if self.fav_has(stop.id):
+            items.append(ExtensionResultItem(
+                icon="images/icon.png",
+                name="Remove from favorites",
+                highlightable=False,
+                on_enter=ExtensionCustomAction(f"remove {stop.id}")
+            ))
+        else:
+            items.append(ExtensionResultItem(
+                icon="images/icon.png",
+                name="Add to favorites",
+                highlightable=False,
+                on_enter=ExtensionCustomAction(f"add {stop.id}")
+            ))
+
+        items.append(ExtensionResultItem(
             icon="images/icon.png",
             name="Back",
             highlightable=False,
-            on_enter=SetUserQueryAction(f"{self.kw} {stop.id}")
-        )
-        if self.fav_has(stop.id):
-            return RenderResultListAction([
-                ExtensionResultItem(
-                    icon="images/icon.png",
-                    name="Remove from favorites",
-                    highlightable=False,
-                    on_enter=ExtensionCustomAction(f"remove {stop.id}")
-                ),
-                back
-            ])
-        else:
-            return RenderResultListAction([
-                ExtensionResultItem(
-                    icon="images/icon.png",
-                    name="Add to favorites",
-                    highlightable=False,
-                    on_enter=ExtensionCustomAction(f"add {stop.id}")
-                ),
-                back
-            ])
+            on_enter=SetUserQueryAction(back + "`")
+        ))
+        return RenderResultListAction(items)
 
-    def make_stop(self, stop: Stop) -> ExtensionResultItem:
+    def make_favourite(self, stop: Stop, departures: Iterable[Departure], back: str) -> ExtensionResultItem:
+        if len(list(departures)) == 0:
+            return self.make_stop(stop)
+        else:
+            departure = list(departures)[0]
+            desc = f"Next: {departure.route_id} {departure.destination} | {departure.time}"
+            if not departure.is_real_time:
+                desc += "*"
+            if departure.time_late:
+                desc += f" - {departure.time_late}"
+            return ExtensionResultItem(
+                icon="images/icon.png",
+                name=f"#{stop.id} {stop.name}",
+                description=desc,
+                highlightable=False,
+                on_enter=SetUserQueryAction(f"{self.kw} departures {stop.id}"),
+                on_alt_enter=self.make_stop_menu(stop, back)
+            )
+
+    def make_stop(self, stop: Stop, back: str) -> ExtensionResultItem:
         return ExtensionResultItem(
             icon="images/icon.png",
             name=f"#{stop.id} {stop.name}",
             description=f"{stop.lat}, {stop.lon}",
             on_enter=SetUserQueryAction(f"{self.kw} departures {stop.id}"),
-            on_alt_enter=self.make_stop_menu(stop)
+            on_alt_enter=self.make_stop_menu(stop, back)
         )
 
-    def make_departures_stop(self, stop: Stop) -> ExtensionResultItem:
+    def make_departures_stop(self, stop: Stop, back: str) -> ExtensionResultItem:
         return ExtensionResultItem(
             icon="images/icon.png",
             name=f"{stop.name}",
             description=f"Last updated {datetime.now().strftime('%H:%M:%S')}",
             highlightable=False,
             on_enter=SetUserQueryAction(f"{self.kw} departures {stop.id} refresh"),
-            on_alt_enter=self.make_stop_menu(stop)
+            on_alt_enter=self.make_stop_menu(stop, back)
         )
 
     def make_departures_departure(self, departure: Departure) -> ExtensionResultItem:
@@ -156,8 +177,10 @@ class PreferencesUpdateListener(EventListener):
 class KeywordQueryListener(EventListener):
     def on_event(self, ev: KeywordQueryEvent, ext: DRTExtension) -> BaseAction:
         try:
-            if ev.get_argument() is None:
-                return ext.get_favorites()
+            if ev.get_query().endswith("`"):
+                return SetUserQueryAction(ev.get_query().rstrip("`"))
+            elif ev.get_argument() is None:
+                return ext.get_favorites(ev)
             elif ev.get_argument().startswith("departures "):
                 return ext.get_departures(ev, ev.get_argument().replace("departures ", "", 1))
             else:
@@ -172,12 +195,8 @@ class ItemEnterListener(EventListener):
     def on_event(self, ev: ItemEnterEvent, ext: DRTExtension) -> BaseAction:
         if ev.get_data().startswith("add "):
             ext.fav_add(ev.get_data().replace("add ", "", 1))
-            return SetUserQueryAction(f"{ext.kw} ")
         elif ev.get_data().startswith("remove "):
             ext.fav_remove(ev.get_data().replace("remove ", "", 1))
-            return SetUserQueryAction(f"{ext.kw} ")
-        else:
-            return DoNothingAction()
 
 if __name__ == '__main__':
     DRTExtension().run()
